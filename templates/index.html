@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADC报警系统中间件</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .status-bar {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+
+        .device-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .device-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .device-card:hover {
+            transform: translateY(-2px);
+        }
+        
+        .device-card.offline {
+            background: #f8f9fa;
+            border: 2px solid #6c757d;
+            opacity: 0.8;
+        }
+
+        .device-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .device-id {
+            font-weight: bold;
+            font-size: 1.2em;
+            color: #333;
+        }
+
+        .device-status {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-online { background: #d4edda; color: #155724; }
+        .status-alarm { background: #f8d7da; color: #721c24; }
+        .status-recover { background: #d1ecf1; color: #0c5460; }
+        .status-heartbeat { background: #fff3cd; color: #856404; }
+        .status-offline { background: #6c757d; color: #ffffff; }
+
+        .device-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .info-label {
+            font-size: 0.8em;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .info-value {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .device-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.2s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd8;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .log-container {
+            height: 400px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .log-entry {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 3px;
+            border-left: 4px solid #ccc;
+        }
+
+        .log-online { border-left-color: #28a745; background: #d4edda; }
+        .log-alarm { border-left-color: #dc3545; background: #f8d7da; }
+        .log-recover { border-left-color: #17a2b8; background: #d1ecf1; }
+        .log-heartbeat { border-left-color: #ffc107; background: #fff3cd; }
+
+        .log-timestamp {
+            color: #666;
+            font-size: 0.8em;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 500px;
+            position: relative;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .close {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+        }
+
+        .close:hover {
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: bold;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .no-devices {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 40px;
+        }
+
+        .device-info-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .device-info-section h3 {
+            margin-bottom: 15px;
+            color: #667eea;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .log-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .summary-label {
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .summary-types {
+            grid-column: 1 / -1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .type-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .type-badge.online { background: #d4edda; color: #155724; }
+        .type-badge.offline { background: #6c757d; color: #ffffff; }
+        .type-badge.alarm { background: #f8d7da; color: #721c24; }
+        .type-badge.recover { background: #d1ecf1; color: #0c5460; }
+        .type-badge.heartbeat { background: #fff3cd; color: #856404; }
+
+        .device-logs {
+            max-height: 400px;
+            overflow-y: auto;
+            background: white;
+            border-radius: 5px;
+            padding: 15px;
+        }
+
+        .device-log-entry {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .device-log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-time {
+            font-size: 0.9em;
+            color: #6c757d;
+            min-width: 120px;
+        }
+
+        .log-type {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            font-weight: bold;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .log-message {
+            flex: 1;
+            margin: 0 15px;
+            color: #495057;
+        }
+
+        .log-details {
+            font-size: 0.8em;
+            color: #6c757d;
+            display: flex;
+            gap: 10px;
+        }
+
+        #logTypeFilter {
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .conflict-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .conflict-message {
+            margin-bottom: 20px;
+        }
+
+        .conflict-message h3 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .conflict-actions h3 {
+            color: #28a745;
+            margin-bottom: 15px;
+        }
+
+        .action-info {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .action-info p {
+            margin: 5px 0;
+        }
+
+        .manual-modify {
+            background: #e9ecef;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            padding: 15px;
+        }
+
+        .manual-modify h4 {
+            color: #495057;
+            margin-bottom: 10px;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>ADC报警系统中间件</h1>
+        <p>实时监控设备状态 | 远程设备管理</p>
+    </div>
+
+    <div class="container">
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="status-dot" id="connectionDot"></div>
+                <span>连接状态: <span id="connectionStatus">连接中...</span></span>
+            </div>
+            <div class="status-actions">
+                <button class="btn btn-primary" onclick="testSSEConnection()">测试SSE</button>
+                <button class="btn btn-secondary" onclick="loadDevices()">刷新设备</button>
+                <button class="btn btn-secondary" onclick="rediscoverDevices()">重新发现</button>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="statsTotalDevices">0</div>
+                <div class="stat-label">设备总数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="statsOnlineDevices">0</div>
+                <div class="stat-label">在线设备</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="statsOfflineDevices">0</div>
+                <div class="stat-label">离线设备</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="statsTotalMessages">0</div>
+                <div class="stat-label">消息总数</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>设备列表</h2>
+            <div class="device-grid" id="deviceGrid">
+                <div class="no-devices">等待设备数据...</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>实时日志</h2>
+            <div class="log-container" id="logContainer">
+                <div class="log-entry">
+                    <div class="log-timestamp">系统启动中...</div>
+                    <div>正在连接事件流...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 修改设备ID模态框 -->
+    <div id="modifyIdModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>修改设备ID</h2>
+            <form id="modifyIdForm">
+                <div class="form-group">
+                    <label for="currentId">当前设备ID:</label>
+                    <input type="number" id="currentId" name="currentId" min="1" max="254" required readonly>
+                </div>
+                <div class="form-group">
+                    <label for="newId">新设备ID:</label>
+                    <input type="number" id="newId" name="newId" min="1" max="254" required>
+                    <div id="newIdError" class="error-message" style="color: red; font-size: 0.9em; margin-top: 5px; display: none;"></div>
+                </div>
+                <div class="form-group">
+                    <label for="targetIp">目标IP地址 (可选):</label>
+                    <input type="text" id="targetIp" name="targetIp" placeholder="255.255.255.255">
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">修改ID</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 设备详情模态框 -->
+    <div id="deviceDetailsModal" class="modal">
+        <div class="modal-content" style="width: 90%; max-width: 800px;">
+            <span class="close" onclick="closeDeviceDetailsModal()">&times;</span>
+            <h2 id="deviceDetailsTitle">设备详情</h2>
+            
+            <div id="deviceDetailsContent">
+                <!-- 设备基本信息 -->
+                <div class="device-info-section">
+                    <h3>基本信息</h3>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">设备ID:</span>
+                            <span id="detailDeviceId">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">当前状态:</span>
+                            <span id="detailStatus">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">首次上线:</span>
+                            <span id="detailFirstSeen">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">最后上线:</span>
+                            <span id="detailLastSeen">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">WiFi信号:</span>
+                            <span id="detailWifiRssi">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">来源IP:</span>
+                            <span id="detailSourceIp">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">报警次数:</span>
+                            <span id="detailAlarmCount">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">恢复次数:</span>
+                            <span id="detailRecoverCount">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">心跳次数:</span>
+                            <span id="detailHeartbeatCount">-</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 日志摘要 -->
+                <div class="device-info-section">
+                    <h3>日志摘要</h3>
+                    <div class="log-summary" id="logSummary">
+                        <div class="summary-item">
+                            <span class="summary-label">总日志数:</span>
+                            <span id="summaryTotalLogs">-</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">首次日志:</span>
+                            <span id="summaryFirstLog">-</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">最新日志:</span>
+                            <span id="summaryLastLog">-</span>
+                        </div>
+                        <div class="summary-types" id="summaryTypes">
+                            <!-- 日志类型统计 -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 设备日志 -->
+                <div class="device-info-section">
+                    <h3>设备日志 
+                        <select id="logTypeFilter" onchange="filterDeviceLogs()">
+                            <option value="">全部</option>
+                            <option value="online">上线</option>
+                            <option value="offline">离线</option>
+                            <option value="alarm">报警</option>
+                            <option value="recover">恢复</option>
+                            <option value="heartbeat">心跳</option>
+                        </select>
+                    </h3>
+                    <div class="device-logs" id="deviceLogs">
+                        <!-- 设备日志列表 -->
+                    </div>
+                </div>
+                         </div>
+         </div>
+     </div>
+
+    <!-- ID冲突通知弹窗 -->
+    <div id="idConflictModal" class="modal">
+        <div class="modal-content" style="width: 80%; max-width: 600px;">
+            <span class="close" onclick="closeIdConflictModal()">&times;</span>
+            <h2>🚨 设备ID冲突通知</h2>
+            
+            <div class="conflict-info">
+                <div class="conflict-message">
+                    <h3>冲突详情</h3>
+                    <p id="conflictDetails">检测到设备ID冲突，系统已自动处理。</p>
+                </div>
+                
+                <div class="conflict-actions">
+                    <h3>处理结果</h3>
+                    <div class="action-info">
+                        <p>✅ 系统已自动将冲突设备的ID从 <strong id="conflictOldId">-</strong> 修改为 <strong id="conflictNewId">-</strong></p>
+                        <p>📍 设备IP地址：<span id="conflictSourceIp">-</span></p>
+                    </div>
+                    
+                    <div class="manual-modify">
+                        <h4>手动修改ID（可选）</h4>
+                        <p>如果您不满意自动分配的ID，可以手动修改：</p>
+                        <div class="form-group">
+                            <label for="manualNewId">新设备ID:</label>
+                            <input type="number" id="manualNewId" min="1" max="254" placeholder="输入新的ID">
+                        </div>
+                        <button class="btn btn-primary" onclick="applyManualIdChange()">应用手动修改</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeIdConflictModal()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let devices = {};
+        let totalMessages = 0;
+        let eventSource = null;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSSE();
+            loadDevices();
+            setupModals();
+        });
+
+        // 初始化SSE连接
+        function initializeSSE() {
+            eventSource = new EventSource('/events');
+            
+            eventSource.onopen = function(event) {
+                updateConnectionStatus('已连接', true);
+                addLogEntry('系统', '事件流连接成功', 'online');
+                console.log('SSE连接已建立');
+            };
+            
+            eventSource.onmessage = function(event) {
+                try {
+                    console.log('收到SSE消息:', event.data);
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'heartbeat') {
+                        // 心跳消息，不需要特殊处理
+                    } else {
+                        handleDeviceMessage(data);
+                    }
+                } catch (e) {
+                    console.error('解析SSE消息失败:', e, '原始数据:', event.data);
+                    addLogEntry('系统', `SSE消息解析错误: ${e.message}`, 'alarm');
+                }
+            };
+            
+            eventSource.onerror = function(event) {
+                updateConnectionStatus('连接错误', false);
+                addLogEntry('系统', '事件流连接错误', 'alarm');
+                console.error('SSE连接错误:', event);
+                
+                // 尝试重新连接
+                setTimeout(function() {
+                    if (eventSource.readyState === EventSource.CLOSED) {
+                        addLogEntry('系统', '尝试重新连接事件流...', 'online');
+                        initializeSSE();
+                    }
+                }, 5000);
+            };
+        }
+
+        // 处理设备消息
+        function handleDeviceMessage(data) {
+            totalMessages++;
+            
+            // 检查是否是设备ID修改事件
+            if (data.type === 'device_id_change') {
+                handleDeviceIdChange(data);
+                return;
+            }
+            
+            // 检查是否是设备离线/上线事件
+            if (data.type === 'device_offline' || data.type === 'device_online') {
+                handleDeviceStatusChange(data);
+                return;
+            }
+            
+            // 检查是否是ID冲突事件
+            if (data.type === 'id_conflict') {
+                handleIdConflict(data);
+                return;
+            }
+            
+            // 检查是否是设备重新发现事件
+            if (data.type === 'device_discovery') {
+                handleDeviceDiscovery(data);
+                return;
+            }
+            
+            // 检查是否是错误事件
+            if (data.type === 'error') {
+                addLogEntry('系统', `错误: ${data.message}`, 'alarm');
+                return;
+            }
+            
+            // 处理设备消息事件
+            if (data.type === 'device_message') {
+                // 更新设备信息
+                if (data.device_info) {
+                    devices[data.device_id] = data.device_info;
+                }
+                
+                // 添加日志条目
+                const logType = getLogType(data.command);
+                const logMessage = `${data.command_name} - RSSI: ${data.wifi_rssi}, IP: ${data.source_ip}`;
+                addLogEntry(`设备${data.device_id}`, logMessage, logType);
+                
+                // 更新显示
+                updateDeviceGrid();
+                updateStats();
+                return;
+            }
+            
+            // 处理其他类型的消息（向后兼容）
+            if (data.device_info) {
+                devices[data.device_id] = data.device_info;
+            }
+            
+            // 添加日志条目
+            const logType = getLogType(data.command);
+            addLogEntry(
+                `设备${data.device_id}`,
+                `${data.command_name} - RSSI: ${data.wifi_rssi}, IP: ${data.source_ip}`,
+                logType
+            );
+            
+            // 更新显示
+            updateDeviceGrid();
+            updateStats();
+        }
+        
+        // 处理设备ID修改事件
+        function handleDeviceIdChange(data) {
+            const oldDeviceId = data.old_device_id;
+            const newDeviceId = data.new_device_id;
+            
+            // 立即从设备列表中移除旧设备
+            if (devices[oldDeviceId]) {
+                delete devices[oldDeviceId];
+                addLogEntry('系统', `设备ID修改检测: 移除旧设备 ${oldDeviceId}`, 'online');
+                
+                // 立即更新显示
+                updateDeviceGrid();
+                updateStats();
+            }
+            
+            // 添加ID修改日志
+            addLogEntry('系统', data.message, 'online');
+            
+            // 启动自动刷新（确保获取最新的设备信息）
+            startAutoRefresh();
+        }
+        
+        // 处理设备状态变化事件（离线/上线）
+        function handleDeviceStatusChange(data) {
+            const deviceId = data.device_id;
+            const isOffline = data.type === 'device_offline';
+            
+            // 更新设备状态
+            if (devices[deviceId]) {
+                devices[deviceId].is_offline = isOffline;
+                if (isOffline) {
+                    devices[deviceId].offline_time = data.timestamp;
+                } else {
+                    delete devices[deviceId].offline_time;
+                }
+                
+                // 立即更新显示
+                updateDeviceGrid();
+                updateStats();
+            }
+            
+            // 添加状态变化日志
+            const logType = isOffline ? 'alarm' : 'online';
+            addLogEntry('系统', data.message, logType);
+        }
+        
+        // 处理ID冲突事件
+        function handleIdConflict(data) {
+            const oldDeviceId = data.old_device_id;
+            const newDeviceId = data.new_device_id;
+            const sourceIp = data.source_ip;
+            
+            // 添加冲突处理日志
+            addLogEntry('系统', data.message, 'alarm');
+            
+            // 显示ID冲突通知弹窗
+            showIdConflictNotification(oldDeviceId, newDeviceId, sourceIp);
+            
+            // 启动自动刷新以获取最新设备信息
+            startAutoRefresh();
+        }
+        
+        // 处理设备重新发现事件
+        function handleDeviceDiscovery(data) {
+            // 添加发现完成日志
+            addLogEntry('系统', data.message, 'online');
+            
+            // 刷新设备列表
+            loadDevices();
+            
+            // 显示通知
+            showDiscoveryNotification();
+        }
+        
+        // 显示设备重新发现通知
+        function showDiscoveryNotification() {
+            // 创建临时通知元素
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+                color: white;
+                padding: 15px 20px;
+                border-radius: 10px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                z-index: 10000;
+                font-size: 14px;
+                font-weight: bold;
+                animation: slideInRight 0.5s ease-out;
+            `;
+            notification.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span>🔄</span>
+                    <span>设备重新发现完成！</span>
+                    <button onclick="this.parentElement.parentElement.remove()" 
+                            style="background: none; border: none; color: white; font-size: 18px; cursor: pointer; margin-left: 10px;">×</button>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // 3秒后自动消失
+            setTimeout(() => {
+                if (notification.parentElement) {
+                    notification.remove();
+                }
+            }, 3000);
+        }
+
+        // 获取日志类型
+        function getLogType(command) {
+            const types = {
+                0: 'online',
+                1: 'alarm',
+                2: 'recover',
+                3: 'heartbeat'
+            };
+            return types[command] || 'online';
+        }
+
+        // 添加日志条目
+        function addLogEntry(source, message, type) {
+            const logContainer = document.getElementById('logContainer');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.innerHTML = `
+                <div class="log-timestamp">${new Date().toLocaleString()}</div>
+                <div><strong>${source}:</strong> ${message}</div>
+            `;
+            
+            logContainer.insertBefore(entry, logContainer.firstChild);
+            
+            // 限制日志条目数量
+            const entries = logContainer.querySelectorAll('.log-entry');
+            if (entries.length > 100) {
+                entries[entries.length - 1].remove();
+            }
+        }
+
+        // 更新设备网格
+        function updateDeviceGrid() {
+            const deviceGrid = document.getElementById('deviceGrid');
+            const deviceList = Object.values(devices);
+            
+            if (deviceList.length === 0) {
+                deviceGrid.innerHTML = '<div class="no-devices">暂无设备数据</div>';
+                return;
+            }
+            
+            deviceGrid.innerHTML = deviceList.map(device => {
+                const isOffline = device.is_offline || false;
+                const statusClass = isOffline ? 'offline' : device.status;
+                const statusText = isOffline ? '离线' : getStatusText(device.status);
+                const cardClass = isOffline ? 'device-card offline' : 'device-card';
+                
+                return `
+                    <div class="${cardClass}">
+                        <div class="device-header">
+                            <div class="device-id">设备 ${device.id} ${isOffline ? '(离线)' : ''}</div>
+                            <div class="device-status status-${statusClass}">${statusText}</div>
+                        </div>
+                        <div class="device-info">
+                            <div class="info-item">
+                                <div class="info-label">${isOffline ? '离线时间' : '最后上线'}</div>
+                                <div class="info-value">${formatTime(isOffline ? device.offline_time : device.last_seen)}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">WiFi信号</div>
+                                <div class="info-value">${device.wifi_rssi} dBm</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">来源IP</div>
+                                <div class="info-value">${device.source_ip}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">报警次数</div>
+                                <div class="info-value">${device.alarm_count}</div>
+                            </div>
+                        </div>
+                        <div class="device-actions">
+                            <button class="btn btn-primary" onclick="modifyDeviceId(${device.id})" ${isOffline ? 'disabled' : ''}>修改ID</button>
+                            <button class="btn btn-secondary" onclick="immediateReport(${device.id})" ${isOffline ? 'disabled' : ''}>立即上报</button>
+                            <button class="btn btn-secondary" onclick="showDeviceDetails(${device.id})">详情</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 更新统计信息
+        function updateStats() {
+            const deviceList = Object.values(devices);
+            
+            const onlineDevices = deviceList.filter(device => 
+                !device.is_offline
+            ).length;
+            
+            const offlineDevices = deviceList.filter(device => 
+                device.is_offline
+            ).length;
+            
+            // 更新统计卡片
+            document.getElementById('statsTotalDevices').textContent = deviceList.length;
+            document.getElementById('statsOnlineDevices').textContent = onlineDevices;
+            document.getElementById('statsOfflineDevices').textContent = offlineDevices;
+            document.getElementById('statsTotalMessages').textContent = totalMessages;
+        }
+
+        // 获取状态文本
+        function getStatusText(status) {
+            const statusMap = {
+                'online': '在线',
+                'alarm': '报警',
+                'recover': '恢复',
+                'heartbeat': '心跳'
+            };
+            return statusMap[status] || '未知';
+        }
+
+        // 格式化时间
+        function formatTime(timeString) {
+            const date = new Date(timeString);
+            return date.toLocaleString();
+        }
+
+        // 更新连接状态
+        function updateConnectionStatus(status, isConnected) {
+            const statusElement = document.getElementById('connectionStatus');
+            const dotElement = document.getElementById('connectionDot');
+            
+            statusElement.textContent = status;
+            dotElement.style.backgroundColor = isConnected ? '#28a745' : '#dc3545';
+        }
+
+
+
+        // 加载设备列表
+        function loadDevices() {
+            fetch('/api/devices')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        data.devices.forEach(device => {
+                            devices[device.id] = device;
+                        });
+                        updateDeviceGrid();
+                        updateStats();
+                    }
+                })
+                .catch(error => {
+                    console.error('加载设备列表失败:', error);
+                });
+        }
+
+        // 修改设备ID
+        function modifyDeviceId(deviceId) {
+            document.getElementById('currentId').value = deviceId;
+            document.getElementById('newId').value = '';
+            document.getElementById('targetIp').value = '';
+            document.getElementById('newIdError').style.display = 'none';
+            document.getElementById('modifyIdModal').style.display = 'block';
+        }
+        
+        // 检查新ID是否重复
+        function checkNewIdDuplicate(newId, currentId) {
+            const errorDiv = document.getElementById('newIdError');
+            
+            if (!newId || newId < 1 || newId > 254) {
+                errorDiv.style.display = 'none';
+                return false;
+            }
+            
+            if (parseInt(newId) === parseInt(currentId)) {
+                errorDiv.textContent = '新ID不能与当前ID相同';
+                errorDiv.style.display = 'block';
+                return true;
+            }
+            
+            // 检查是否与现有设备ID重复
+            const existingDevice = devices[newId];
+            if (existingDevice) {
+                if (existingDevice.is_offline) {
+                    const offlineTime = new Date(existingDevice.offline_time);
+                    const timeDiff = (Date.now() - offlineTime.getTime()) / 1000;
+                    if (timeDiff < 300) { // 5分钟内
+                        errorDiv.textContent = `ID ${newId} 已被离线设备使用（离线时间不足5分钟）`;
+                        errorDiv.style.display = 'block';
+                        return true;
+                    }
+                } else {
+                    errorDiv.textContent = `ID ${newId} 已被在线设备使用`;
+                    errorDiv.style.display = 'block';
+                    return true;
+                }
+            }
+            
+            errorDiv.style.display = 'none';
+            return false;
+        }
+
+        // 立即上报
+        function immediateReport(deviceId) {
+            const device = devices[deviceId];
+            if (!device) return;
+            
+            fetch('/api/immediate_report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    device_id: deviceId,
+                    target_ip: device.source_ip || '255.255.255.255'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addLogEntry('系统', data.message, 'online');
+                } else {
+                    addLogEntry('系统', `立即上报失败: ${data.message}`, 'alarm');
+                }
+            })
+            .catch(error => {
+                addLogEntry('系统', `立即上报请求失败: ${error.message}`, 'alarm');
+            });
+        }
+        
+        // 重新发现设备
+        function rediscoverDevices() {
+            // 禁用按钮避免重复点击
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '🔄 发现中...';
+            
+            fetch('/api/rediscover_devices', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addLogEntry('系统', data.message, 'online');
+                } else {
+                    addLogEntry('系统', `重新发现设备失败: ${data.message}`, 'alarm');
+                }
+            })
+            .catch(error => {
+                addLogEntry('系统', `重新发现设备请求失败: ${error.message}`, 'alarm');
+            })
+            .finally(() => {
+                // 10秒后恢复按钮
+                setTimeout(() => {
+                    button.disabled = false;
+                    button.innerHTML = originalText;
+                }, 10000);
+            });
+        }
+
+        // 测试SSE连接
+        function testSSEConnection() {
+            const statusElement = document.getElementById('connectionStatus');
+            const dotElement = document.getElementById('connectionDot');
+
+            statusElement.textContent = '测试中...';
+            dotElement.style.backgroundColor = '#ffc107'; // 黄色表示测试中
+
+            const testMessage = 'SSE_TEST_MESSAGE';
+            const testEventSource = new EventSource('/test_sse');
+
+            testEventSource.onopen = function(event) {
+                statusElement.textContent = '已连接';
+                dotElement.style.backgroundColor = '#28a745'; // 绿色表示已连接
+                addLogEntry('系统', 'SSE连接测试成功', 'online');
+                testEventSource.close();
+            };
+
+            testEventSource.onerror = function(event) {
+                statusElement.textContent = '连接错误';
+                dotElement.style.backgroundColor = '#dc3545'; // 红色表示连接错误
+                addLogEntry('系统', 'SSE连接测试失败', 'alarm');
+                testEventSource.close();
+            };
+        }
+
+        // 设置模态框
+        function setupModals() {
+            // 关闭模态框
+            document.querySelector('.close').onclick = closeModal;
+            
+            // 点击模态框外部关闭
+            window.onclick = function(event) {
+                const modifyModal = document.getElementById('modifyIdModal');
+                const detailsModal = document.getElementById('deviceDetailsModal');
+                const conflictModal = document.getElementById('idConflictModal');
+                
+                if (event.target === modifyModal) {
+                    closeModal();
+                } else if (event.target === detailsModal) {
+                    closeDeviceDetailsModal();
+                } else if (event.target === conflictModal) {
+                    closeIdConflictModal();
+                }
+            };
+            
+            // 新ID输入实时检查
+            document.getElementById('newId').addEventListener('input', function() {
+                const newId = this.value;
+                const currentId = document.getElementById('currentId').value;
+                checkNewIdDuplicate(newId, currentId);
+            });
+            
+            // 修改ID表单提交
+            document.getElementById('modifyIdForm').onsubmit = function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(e.target);
+                const currentId = parseInt(formData.get('currentId'));
+                const newId = parseInt(formData.get('newId'));
+                const targetIp = formData.get('targetIp') || '255.255.255.255';
+                
+                // 提交前最后检查一次
+                if (checkNewIdDuplicate(newId, currentId)) {
+                    addLogEntry('系统', '修改ID失败: 新ID已被使用或无效', 'alarm');
+                    return;
+                }
+                
+                const data = {
+                    current_id: currentId,
+                    new_id: newId,
+                    target_ip: targetIp
+                };
+                
+                fetch('/api/modify_device_id', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success) {
+                        addLogEntry('系统', result.message, 'online');
+                        closeModal();
+                        // 修改成功后，等待SSE消息触发自动刷新
+                        addLogEntry('系统', '等待设备响应...', 'online');
+                    } else {
+                        addLogEntry('系统', `修改ID失败: ${result.message}`, 'alarm');
+                    }
+                })
+                .catch(error => {
+                    addLogEntry('系统', `修改ID请求失败: ${error.message}`, 'alarm');
+                });
+            };
+        }
+
+        // 关闭模态框
+        function closeModal() {
+            document.getElementById('modifyIdModal').style.display = 'none';
+        }
+
+        // 全局变量，防止重复启动自动刷新
+        let autoRefreshActive = false;
+        let globalRefreshTimer = null;
+        
+        // 开始自动刷新倒计时
+        function startAutoRefresh() {
+            // 如果已经有自动刷新在进行，取消之前的
+            if (autoRefreshActive && globalRefreshTimer) {
+                clearTimeout(globalRefreshTimer);
+                addLogEntry('系统', '取消之前的自动刷新，启动新的刷新流程', 'online');
+            }
+            
+            autoRefreshActive = true;
+            let countdown = 3; // 3秒倒计时
+            let refreshTimer = null;
+            let countdownEntry = null;
+            
+            // 创建倒计时条目
+            function createCountdownEntry() {
+                const logContainer = document.getElementById('logContainer');
+                const entry = document.createElement('div');
+                entry.className = 'log-entry log-online';
+                entry.style.cursor = 'pointer';
+                entry.title = '点击立即刷新';
+                entry.innerHTML = `
+                    <div class="log-timestamp">${new Date().toLocaleString()}</div>
+                    <div><strong>系统:</strong> <span class="countdown-text">设备ID修改成功，${countdown}秒后自动刷新设备列表... (点击此处可立即刷新)</span></div>
+                `;
+                
+                logContainer.insertBefore(entry, logContainer.firstChild);
+                
+                // 添加点击事件
+                entry.addEventListener('click', function() {
+                    executeRefresh();
+                });
+                
+                return entry;
+            }
+            
+            // 更新倒计时显示
+            function updateCountdown() {
+                if (countdown > 0) {
+                    if (!countdownEntry) {
+                        countdownEntry = createCountdownEntry();
+                    } else {
+                        const textElement = countdownEntry.querySelector('.countdown-text');
+                        if (textElement) {
+                            textElement.textContent = `设备ID修改成功，${countdown}秒后自动刷新设备列表... (点击此处可立即刷新)`;
+                        }
+                    }
+                    countdown--;
+                    refreshTimer = setTimeout(updateCountdown, 1000);
+                    globalRefreshTimer = refreshTimer; // 保存全局定时器引用
+                } else {
+                    // 倒计时结束，执行刷新
+                    executeRefresh();
+                }
+            }
+            
+            // 执行刷新
+            function executeRefresh() {
+                if (refreshTimer) {
+                    clearTimeout(refreshTimer);
+                }
+                
+                // 清除全局刷新状态
+                autoRefreshActive = false;
+                globalRefreshTimer = null;
+                
+                // 更新倒计时条目显示为刷新中
+                if (countdownEntry) {
+                    const textElement = countdownEntry.querySelector('.countdown-text');
+                    if (textElement) {
+                        textElement.textContent = '正在刷新设备列表...';
+                    }
+                    countdownEntry.style.cursor = 'default';
+                    countdownEntry.title = '';
+                }
+                
+                loadDevices();
+                
+                // 延迟显示完成消息，让用户看到刷新效果
+                setTimeout(() => {
+                    if (countdownEntry) {
+                        const textElement = countdownEntry.querySelector('.countdown-text');
+                        if (textElement) {
+                            textElement.textContent = '设备列表刷新完成';
+                        }
+                    }
+                }, 500);
+            }
+            
+            // 开始倒计时
+            updateCountdown();
+        }
+
+        // 全局变量，用于存储当前详情页面的设备ID
+        let currentDetailsDeviceId = null;
+        
+        // 显示设备详情
+        function showDeviceDetails(deviceId) {
+            currentDetailsDeviceId = deviceId;
+            const device = devices[deviceId];
+            
+            if (!device) {
+                alert('设备不存在');
+                return;
+            }
+            
+            // 更新设备详情标题
+            document.getElementById('deviceDetailsTitle').textContent = `设备 ${deviceId} 详情`;
+            
+            // 更新基本信息
+            document.getElementById('detailDeviceId').textContent = device.id;
+            document.getElementById('detailStatus').textContent = device.is_offline ? '离线' : getStatusText(device.status);
+            document.getElementById('detailFirstSeen').textContent = formatTime(device.first_seen);
+            document.getElementById('detailLastSeen').textContent = formatTime(device.last_seen);
+            document.getElementById('detailWifiRssi').textContent = device.wifi_rssi + ' dBm';
+            document.getElementById('detailSourceIp').textContent = device.source_ip;
+            document.getElementById('detailAlarmCount').textContent = device.alarm_count;
+            document.getElementById('detailRecoverCount').textContent = device.recover_count;
+            document.getElementById('detailHeartbeatCount').textContent = device.heartbeat_count;
+            
+            // 加载日志摘要
+            loadDeviceLogSummary(deviceId);
+            
+            // 加载设备日志
+            loadDeviceLogs(deviceId);
+            
+            // 显示模态框
+            document.getElementById('deviceDetailsModal').style.display = 'block';
+        }
+        
+        // 加载设备日志摘要
+        function loadDeviceLogSummary(deviceId) {
+            fetch(`/api/device/${deviceId}/logs/summary`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const summary = data.summary;
+                        document.getElementById('summaryTotalLogs').textContent = summary.total_logs;
+                        document.getElementById('summaryFirstLog').textContent = 
+                            summary.first_log ? formatTime(summary.first_log) : '-';
+                        document.getElementById('summaryLastLog').textContent = 
+                            summary.last_log ? formatTime(summary.last_log) : '-';
+                        
+                        // 更新日志类型统计
+                        const typesContainer = document.getElementById('summaryTypes');
+                        typesContainer.innerHTML = '';
+                        
+                        const typeNames = {
+                            'online': '上线',
+                            'offline': '离线',
+                            'alarm': '报警',
+                            'recover': '恢复',
+                            'heartbeat': '心跳'
+                        };
+                        
+                        for (const [type, count] of Object.entries(summary.log_types)) {
+                            const badge = document.createElement('span');
+                            badge.className = `type-badge ${type}`;
+                            badge.textContent = `${typeNames[type] || type}: ${count}`;
+                            typesContainer.appendChild(badge);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('加载日志摘要失败:', error);
+                });
+        }
+        
+        // 加载设备日志
+        function loadDeviceLogs(deviceId, logType = null) {
+            const url = `/api/device/${deviceId}/logs` + (logType ? `?type=${logType}` : '');
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayDeviceLogs(data.logs);
+                    }
+                })
+                .catch(error => {
+                    console.error('加载设备日志失败:', error);
+                });
+        }
+        
+        // 显示设备日志
+        function displayDeviceLogs(logs) {
+            const logsContainer = document.getElementById('deviceLogs');
+            
+            if (logs.length === 0) {
+                logsContainer.innerHTML = '<div class="no-devices">暂无日志数据</div>';
+                return;
+            }
+            
+            const typeNames = {
+                'online': '上线',
+                'offline': '离线',
+                'alarm': '报警',
+                'recover': '恢复',
+                'heartbeat': '心跳'
+            };
+            
+            logsContainer.innerHTML = logs.map(log => `
+                <div class="device-log-entry">
+                    <div class="log-time">${formatTime(log.timestamp)}</div>
+                    <div class="log-type ${log.type}">${typeNames[log.type] || log.type}</div>
+                    <div class="log-message">${log.message}</div>
+                    <div class="log-details">
+                        <span>RSSI: ${log.wifi_rssi}dBm</span>
+                        <span>IP: ${log.source_ip}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // 过滤设备日志
+        function filterDeviceLogs() {
+            const logType = document.getElementById('logTypeFilter').value;
+            if (currentDetailsDeviceId) {
+                loadDeviceLogs(currentDetailsDeviceId, logType || null);
+            }
+        }
+        
+        // 关闭设备详情模态框
+        function closeDeviceDetailsModal() {
+            document.getElementById('deviceDetailsModal').style.display = 'none';
+            currentDetailsDeviceId = null;
+        }
+        
+        // 全局变量，用于存储当前冲突信息
+        let currentConflictInfo = null;
+        
+        // 显示ID冲突通知弹窗
+        function showIdConflictNotification(oldDeviceId, newDeviceId, sourceIp) {
+            currentConflictInfo = {
+                oldDeviceId: oldDeviceId,
+                newDeviceId: newDeviceId,
+                sourceIp: sourceIp
+            };
+            
+            // 更新弹窗内容
+            document.getElementById('conflictDetails').textContent = 
+                `检测到设备ID ${oldDeviceId} 与现有设备冲突，系统已自动处理。`;
+            document.getElementById('conflictOldId').textContent = oldDeviceId;
+            document.getElementById('conflictNewId').textContent = newDeviceId;
+            document.getElementById('conflictSourceIp').textContent = sourceIp;
+            
+            // 清空手动修改输入框
+            document.getElementById('manualNewId').value = '';
+            
+            // 显示弹窗
+            document.getElementById('idConflictModal').style.display = 'block';
+        }
+        
+        // 关闭ID冲突通知弹窗
+        function closeIdConflictModal() {
+            document.getElementById('idConflictModal').style.display = 'none';
+            currentConflictInfo = null;
+        }
+        
+        // 应用手动ID修改
+        function applyManualIdChange() {
+            if (!currentConflictInfo) {
+                alert('无冲突信息');
+                return;
+            }
+            
+            const manualNewId = document.getElementById('manualNewId').value;
+            if (!manualNewId || manualNewId < 1 || manualNewId > 254) {
+                alert('请输入有效的设备ID (1-254)');
+                return;
+            }
+            
+            const newIdNum = parseInt(manualNewId);
+            if (newIdNum === currentConflictInfo.newDeviceId) {
+                alert('新ID与当前ID相同，无需修改');
+                return;
+            }
+            
+            // 检查新ID是否已被使用
+            const existingDevice = devices[newIdNum];
+            if (existingDevice) {
+                if (existingDevice.is_offline) {
+                    const offlineTime = new Date(existingDevice.offline_time);
+                    const timeDiff = (Date.now() - offlineTime.getTime()) / 1000;
+                    if (timeDiff < 300) { // 5分钟内
+                        alert(`ID ${newIdNum} 已被离线设备使用（离线时间不足5分钟），请选择其他ID`);
+                        return;
+                    }
+                } else {
+                    alert(`ID ${newIdNum} 已被在线设备使用，请选择其他ID`);
+                    return;
+                }
+            }
+            
+            // 发送手动修改ID请求
+            const requestData = {
+                current_id: currentConflictInfo.newDeviceId,
+                new_id: newIdNum,
+                target_ip: currentConflictInfo.sourceIp
+            };
+            
+            fetch('/api/modify_device_id', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    addLogEntry('系统', `手动修改ID成功: ${currentConflictInfo.newDeviceId} -> ${newIdNum}`, 'online');
+                    closeIdConflictModal();
+                    startAutoRefresh();
+                } else {
+                    addLogEntry('系统', `手动修改ID失败: ${result.message}`, 'alarm');
+                }
+            })
+            .catch(error => {
+                addLogEntry('系统', `手动修改ID请求失败: ${error.message}`, 'alarm');
+            });
+        }
+        
+        // 页面关闭时清理
+        window.addEventListener('beforeunload', function() {
+            if (eventSource) {
+                eventSource.close();
+            }
+        });
+    </script>
+</body>
+</html> 
